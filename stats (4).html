@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboScratch — Адмінка</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  body { background:#0f172a; color:white; font-family:'Segoe UI',sans-serif; }
+  .card { background:rgba(30,41,59,0.9); border:1px solid rgba(255,255,255,0.07); border-radius:16px; }
+  .trow:hover { background:rgba(255,255,255,0.04); }
+  ::-webkit-scrollbar { width:5px; }
+  ::-webkit-scrollbar-track { background:#1e293b; }
+  ::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+  .tab-btn { transition:all .2s; }
+  .tab-btn.active { background:rgba(59,130,246,0.2); border-color:rgba(59,130,246,0.5); color:#93c5fd; }
+  .role-badge-teacher { background:rgba(168,85,247,0.2); color:#c4b5fd; border:1px solid rgba(168,85,247,0.3); }
+  .role-badge-student  { background:rgba(51,65,85,0.6);   color:#94a3b8;  border:1px solid rgba(255,255,255,0.08); }
+  .toast { position:fixed; bottom:24px; right:24px; z-index:999; transform:translateY(100px); opacity:0; transition:.35s cubic-bezier(.34,1.56,.64,1); }
+  .toast.show { transform:translateY(0); opacity:1; }
+  .journal-table { border-collapse:collapse; font-size:0.78rem; }
+  .journal-table th, .journal-table td { border:1px solid #1e293b; padding:5px 7px; white-space:nowrap; }
+  .journal-table thead th { background:#1e293b; color:#64748b; text-align:center; }
+  .journal-table .name-cell { text-align:left; min-width:160px; color:#e2e8f0; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ── Вхід ── -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+  <div class="card p-8 w-full max-w-xs text-center">
+    <div class="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <i class="fa-solid fa-shield-halved text-2xl"></i>
+    </div>
+    <h1 class="text-lg font-bold mb-1">RoboScratch Admin</h1>
+    <p class="text-slate-400 text-sm mb-5">Введіть адмін-ключ</p>
+    <input id="keyInput" type="password" placeholder="Admin key"
+      class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500 mb-3">
+    <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl text-sm transition-all">
+      Увійти
+    </button>
+    <p id="loginErr" class="text-red-400 text-xs mt-3 hidden">Невірний ключ</p>
+  </div>
+</div>
+
+<!-- ── Дашборд ── -->
+<div id="dashboard" class="hidden min-h-screen">
+
+  <div class="border-b border-slate-800 px-6 py-4 flex items-center justify-between sticky top-0 z-10" style="background:#0f172a">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><i class="fa-solid fa-robot text-sm"></i></div>
+      <span class="font-bold text-lg">RoboScratch</span>
+      <span class="text-slate-500 text-sm">/ Адмінка</span>
+    </div>
+    <button onclick="loadAll()" class="text-slate-400 hover:text-white text-sm flex items-center gap-2">
+      <i class="fa-solid fa-rotate-right" id="refreshIcon"></i> Оновити
+    </button>
+  </div>
+
+  <div class="flex gap-1 px-6 pt-4 border-b border-slate-800 flex-wrap">
+    <button onclick="showTab('stats')"    class="tab-btn active px-4 py-2 rounded-t-lg border border-transparent text-sm font-medium" id="tab-stats">📊 Статистика</button>
+    <button onclick="showTab('users')"    class="tab-btn px-4 py-2 rounded-t-lg border border-transparent text-sm font-medium" id="tab-users">👤 Користувачі</button>
+    <button onclick="showTab('journals')" class="tab-btn px-4 py-2 rounded-t-lg border border-transparent text-sm font-medium" id="tab-journals">📓 Журнали</button>
+    <button onclick="showTab('keys')"     class="tab-btn px-4 py-2 rounded-t-lg border border-transparent text-sm font-medium" id="tab-keys">🔑 Ключі</button>
+    <button onclick="showTab('actions')"  class="tab-btn px-4 py-2 rounded-t-lg border border-transparent text-sm font-medium" id="tab-actions">⚙️ Дії</button>
+  </div>
+
+  <div class="p-4 md:p-6 max-w-6xl mx-auto">
+
+    <!-- ══ СТАТИСТИКА ══ -->
+    <div id="view-stats">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="card p-4"><p class="text-slate-400 text-xs mb-1">Всього юзерів</p><p class="text-2xl font-bold" id="statTotal">—</p><p class="text-slate-500 text-xs mt-1">зареєстровані</p></div>
+        <div class="card p-4"><p class="text-slate-400 text-xs mb-1">Сьогодні</p><p class="text-2xl font-bold text-green-400" id="statToday">—</p><p class="text-slate-500 text-xs mt-1">заходили</p></div>
+        <div class="card p-4"><p class="text-slate-400 text-xs mb-1">За тиждень</p><p class="text-2xl font-bold text-blue-400" id="statWeek">—</p><p class="text-slate-500 text-xs mt-1">унікальних</p></div>
+        <div class="card p-4"><p class="text-slate-400 text-xs mb-1">За місяць</p><p class="text-2xl font-bold text-purple-400" id="statMonth">—</p><p class="text-slate-500 text-xs mt-1">унікальних</p></div>
+      </div>
+      <div class="card p-5 mb-6">
+        <h2 class="text-sm font-semibold text-slate-300 mb-4"><i class="fa-solid fa-user-plus text-green-400 mr-2"></i>Нові реєстрації (30 днів)</h2>
+        <div style="height:180px"><canvas id="newUsersChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ══ КОРИСТУВАЧІ ══ -->
+    <div id="view-users" class="hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <input id="searchInput" type="text" placeholder="Пошук по ніку або пошті..."
+          oninput="filterUsers()"
+          class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+        <span class="text-slate-500 text-sm whitespace-nowrap" id="userCount">—</span>
+        <button onclick="printUsers()" title="Друк списку" class="w-9 h-9 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center justify-center transition-all">
+          <i class="fa-solid fa-print text-sm"></i>
+        </button>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-slate-500 text-xs border-b border-slate-800">
+                <th class="text-left px-4 py-3">Нікнейм</th>
+                <th class="text-left px-4 py-3">Пошта</th>
+                <th class="text-left px-4 py-3">Роль</th>
+                <th class="text-left px-4 py-3 hidden sm:table-cell">Реєстрація</th>
+                <th class="text-left px-4 py-3 hidden sm:table-cell">Остання дія</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ЖУРНАЛИ ══ -->
+    <div id="view-journals" class="hidden">
+      <div class="card p-4 mb-4">
+        <div class="flex flex-wrap gap-3 items-end">
+          <div class="flex-1 min-w-[200px]">
+            <label class="text-slate-400 text-xs mb-1 block">Вчитель</label>
+            <select id="teacherSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500">
+              <option value="">— оберіть вчителя —</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-slate-400 text-xs mb-1 block">З</label>
+            <input id="journalFrom" type="date" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 text-xs mb-1 block">По</label>
+            <input id="journalTo" type="date" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500">
+          </div>
+          <button onclick="loadJournal()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all">
+            <i class="fa-solid fa-magnifying-glass mr-1"></i> Показати
+          </button>
+          <button onclick="printJournal()" id="btnPrintJournal" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-all hidden">
+            <i class="fa-solid fa-print mr-1"></i> Друк / PDF
+          </button>
+        </div>
+      </div>
+
+      <div id="teacherCards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4"></div>
+
+      <div id="journalWrap" class="hidden">
+        <div class="card overflow-hidden">
+          <div class="overflow-x-auto p-3" id="journalInner"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ КЛЮЧІ ══ -->
+    <div id="view-keys" class="hidden">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card p-5">
+          <h2 class="text-sm font-semibold text-slate-300 mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-plus text-green-400"></i> Додати ключ
+          </h2>
+          <p class="text-slate-500 text-xs mb-4">Новий ключ матиме ті ж права що й master-ключ.</p>
+          <div class="flex flex-col gap-2">
+            <input id="keyLabel" type="text" placeholder="Назва (Телефон, Вася...)"
+              class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-green-500">
+            <div class="flex gap-2">
+              <input id="keyValue" type="text" placeholder="Ключ (мін. 8 символів)"
+                class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-green-500 font-mono">
+              <button onclick="generateKey()" title="Згенерувати випадковий" class="w-10 h-10 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center justify-center transition-all">
+                <i class="fa-solid fa-dice text-sm"></i>
+              </button>
+            </div>
+            <button onclick="addKey()" class="bg-green-700 hover:bg-green-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-all">
+              Додати ключ
+            </button>
+          </div>
+          <div id="keyAddResult" class="mt-3 text-sm hidden"></div>
+        </div>
+
+        <div class="card p-5">
+          <h2 class="text-sm font-semibold text-slate-300 mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-key text-yellow-400"></i> Активні ключі
+          </h2>
+          <p class="text-slate-500 text-xs mb-4">Master-ключ (з secrets) тут не відображається.</p>
+          <div id="keysList" class="space-y-2"><p class="text-xs text-slate-500">Завантаження...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ДІЇ ══ -->
+    <div id="view-actions" class="hidden space-y-4">
+      <div class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-300 mb-1 flex items-center gap-2">
+          <i class="fa-solid fa-trash text-red-400"></i> Видалити акаунт
+        </h2>
+        <p class="text-slate-500 text-xs mb-4">Введіть email або нікнейм. Видаляється безповоротно разом з усіма даними журналу.</p>
+        <div class="flex gap-3">
+          <input id="deleteQuery" type="text" placeholder="email або нікнейм"
+            class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-red-500">
+          <button onclick="deleteUser()" class="bg-red-600 hover:bg-red-500 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all">Видалити</button>
+        </div>
+        <div id="deleteResult" class="mt-3 text-sm hidden"></div>
+      </div>
+      <div class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-300 mb-1 flex items-center gap-2">
+          <i class="fa-solid fa-chalkboard-user text-purple-400"></i> Призначити вчителя
+        </h2>
+        <p class="text-slate-500 text-xs mb-4">Введіть email або нікнейм юзера.</p>
+        <div class="flex gap-3">
+          <input id="teacherQuery" type="text" placeholder="email або нікнейм"
+            class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-purple-500">
+          <button onclick="setTeacher()" class="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all">Призначити</button>
+          <button onclick="setStudent()"  class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all">Зняти роль</button>
+        </div>
+        <div id="teacherResult" class="mt-3 text-sm hidden"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast" class="toast card px-4 py-3 flex items-center gap-3 min-w-[220px]">
+  <i id="toastIcon" class="text-lg"></i>
+  <span id="toastMsg" class="text-sm font-medium"></span>
+</div>
+
+<script>
+const SERVER = "https://rc-sumo-server.kafrdrapv1.workers.dev";
+let adminKey = "";
+let allUsers = [];
+let newUsersChartInst = null;
+let teachersList = [];
+
+// ── Вхід ─────────────────────────────────────────────────────────────────────
+function login() {
+  adminKey = document.getElementById("keyInput").value.trim();
+  if (!adminKey) return;
+  loadAll();
+}
+document.getElementById("keyInput").addEventListener("keydown", e => { if(e.key==="Enter") login(); });
+
+// ── Завантаження ──────────────────────────────────────────────────────────────
+async function loadAll() {
+  document.getElementById("refreshIcon").classList.add("fa-spin");
+  try {
+    const res = await fetch(`${SERVER}/auth/stats?admin_key=${encodeURIComponent(adminKey)}`);
+    if (res.status === 403) { document.getElementById("loginErr").classList.remove("hidden"); return; }
+    const data = await res.json();
+    document.getElementById("loginErr").classList.add("hidden");
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("dashboard").classList.remove("hidden");
+    renderAll(data);
+    loadTeachers();
+    loadKeys();
+  } catch { toast("❌ Помилка з'єднання", "error"); }
+  document.getElementById("refreshIcon").classList.remove("fa-spin");
+}
+
+function renderAll(data) {
+  const s = data.summary;
+  document.getElementById("statTotal").textContent = s.total_users;
+  document.getElementById("statToday").textContent = s.active_today;
+  document.getElementById("statWeek").textContent  = s.active_week;
+  document.getElementById("statMonth").textContent = s.active_month;
+  renderNewUsersChart(data.new_users_daily || []);
+  allUsers = data.users || [];
+  filterUsers();
+}
+
+function renderNewUsersChart(stats) {
+  if (newUsersChartInst) newUsersChartInst.destroy();
+  const sorted = [...stats].reverse();
+  newUsersChartInst = new Chart(document.getElementById("newUsersChart"), {
+    type: "line",
+    data: {
+      labels: sorted.map(d => { const [,m,dy]=d.day.split("-"); return `${dy}.${m}`; }),
+      datasets: [{ data: sorted.map(d=>d.new_users),
+        borderColor:"rgba(34,197,94,1)", backgroundColor:"rgba(34,197,94,0.1)",
+        borderWidth:2, pointRadius:3, fill:true, tension:0.3 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales: { x:{ticks:{color:"#64748b",font:{size:10}},grid:{color:"rgba(255,255,255,0.04)"}},
+                y:{ticks:{color:"#64748b",font:{size:10}},grid:{color:"rgba(255,255,255,0.04)"},beginAtZero:true} } }
+  });
+}
+
+// ── Користувачі ───────────────────────────────────────────────────────────────
+function filterUsers() {
+  const q = document.getElementById("searchInput").value.toLowerCase();
+  const filtered = q ? allUsers.filter(u=>(u.username||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q)) : allUsers;
+  document.getElementById("userCount").textContent = `${filtered.length} / ${allUsers.length}`;
+  renderUsersTable(filtered);
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById("usersTable");
+  if (!users.length) {
+    tbody.innerHTML='<tr><td colspan="6" class="text-slate-500 text-center py-8">Нічого не знайдено</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => {
+    const isT = u.role === "teacher";
+    const badge = isT
+      ? `<span class="role-badge-teacher text-xs px-2 py-0.5 rounded-full font-medium">Вчитель</span>`
+      : `<span class="role-badge-student text-xs px-2 py-0.5 rounded-full">Учень</span>`;
+    return `<tr class="trow border-b border-slate-800/50">
+      <td class="px-4 py-3 font-medium">${esc(u.username)||"—"}</td>
+      <td class="px-4 py-3 text-slate-400 text-xs">
+        <span class="flex items-center gap-1.5">
+          <span>${esc(u.email)}</span>
+          <button onclick="copyEmail('${esc(u.email)}')" title="Скопіювати" class="opacity-40 hover:opacity-100 text-slate-300 transition-opacity"><i class="fa-regular fa-copy text-xs"></i></button>
+        </span>
+      </td>
+      <td class="px-4 py-3">${badge}</td>
+      <td class="px-4 py-3 text-slate-500 text-xs hidden sm:table-cell">${u.registered||"—"}</td>
+      <td class="px-4 py-3 text-slate-500 text-xs hidden sm:table-cell">${u.last_seen||"—"}</td>
+      <td class="px-4 py-3">
+        <div class="flex gap-1 justify-end">
+          ${isT
+            ? `<button onclick="quickRole('${esc(u.email)}','student')" title="Зняти роль" class="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 text-xs flex items-center justify-center"><i class="fa-solid fa-user"></i></button>`
+            : `<button onclick="quickRole('${esc(u.email)}','teacher')" title="Зробити вчителем" class="w-7 h-7 rounded-lg bg-purple-900/40 hover:bg-purple-800/50 text-purple-400 text-xs flex items-center justify-center"><i class="fa-solid fa-chalkboard-user"></i></button>`
+          }
+          <button onclick="quickDelete('${esc(u.email)}')" title="Видалити" class="w-7 h-7 rounded-lg bg-red-900/30 hover:bg-red-800/50 text-red-400 text-xs flex items-center justify-center"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function copyEmail(email) {
+  navigator.clipboard.writeText(email).then(() => toast("📋 " + email, "success"));
+}
+
+function printUsers() {
+  const q = document.getElementById("searchInput").value.toLowerCase();
+  const list = q ? allUsers.filter(u=>(u.username||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q)) : allUsers;
+  const rows = list.map((u,i)=>`<tr>
+    <td>${i+1}</td><td>${esc(u.username)||"—"}</td><td>${esc(u.email)}</td>
+    <td>${u.role==="teacher"?"Вчитель":"Учень"}</td>
+    <td>${u.registered||"—"}</td><td>${u.last_seen||"—"}</td>
+  </tr>`).join("");
+  const w = window.open("","_blank");
+  w.document.write(`<html><head><title>Користувачі RoboScratch</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px}
+  table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:5px 8px}
+  th{background:#f0f0f0}h2{font-size:14px;margin-bottom:10px}</style></head>
+  <body><h2>Користувачі RoboScratch — ${new Date().toLocaleDateString("uk-UA")} (${list.length})</h2>
+  <table><thead><tr><th>#</th><th>Нікнейм</th><th>Пошта</th><th>Роль</th><th>Реєстрація</th><th>Остання дія</th></tr></thead>
+  <tbody>${rows}</tbody></table></body></html>`);
+  w.document.close(); w.print();
+}
+
+// ── Журнали ───────────────────────────────────────────────────────────────────
+async function loadTeachers() {
+  try {
+    const res = await fetch(`${SERVER}/admin/teachers?admin_key=${encodeURIComponent(adminKey)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    teachersList = data.teachers || [];
+    renderTeacherCards();
+    // Заповнити select
+    const sel = document.getElementById("teacherSelect");
+    sel.innerHTML = '<option value="">— оберіть вчителя —</option>' +
+      teachersList.map(t=>`<option value="${t.id}">${esc(t.username)} (${esc(t.email)})</option>`).join("");
+  } catch {}
+}
+
+function renderTeacherCards() {
+  const el = document.getElementById("teacherCards");
+  if (!teachersList.length) {
+    el.innerHTML = '<p class="text-slate-500 text-sm">Вчителів ще немає. Призначте роль через вкладку ⚙️ Дії.</p>';
+    return;
+  }
+  el.innerHTML = teachersList.map(t=>`
+    <div class="card p-4 cursor-pointer hover:border-blue-500/40 transition-all" onclick="selectTeacher(${t.id})">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-purple-900/40 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-chalkboard-user text-purple-400 text-sm"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="font-semibold text-sm truncate">${esc(t.username)}</p>
+          <p class="text-slate-500 text-xs truncate">${esc(t.email)}</p>
+        </div>
+      </div>
+      <div class="mt-3 flex gap-4 text-xs text-slate-500">
+        <span><i class="fa-solid fa-users mr-1 text-slate-600"></i>${t.student_count} учнів</span>
+        <span><i class="fa-solid fa-clock mr-1 text-slate-600"></i>${t.last_seen||"—"}</span>
+      </div>
+    </div>`).join("");
+}
+
+function selectTeacher(id) {
+  document.getElementById("teacherSelect").value = id;
+  // Встановити поточний місяць
+  const now = new Date();
+  document.getElementById("journalFrom").value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  document.getElementById("journalTo").value   = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+  loadJournal();
+}
+
+let _journalData = null;
+
+async function loadJournal() {
+  const teacherId = document.getElementById("teacherSelect").value;
+  if (!teacherId) { toast("Оберіть вчителя", "error"); return; }
+  const now = new Date();
+  const from = document.getElementById("journalFrom").value || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const to   = document.getElementById("journalTo").value   || new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+  if (!document.getElementById("journalFrom").value) document.getElementById("journalFrom").value = from;
+  if (!document.getElementById("journalTo").value)   document.getElementById("journalTo").value   = to;
+  try {
+    const res = await fetch(`${SERVER}/admin/teacher-journal?teacher_id=${teacherId}&from=${from}&to=${to}&admin_key=${encodeURIComponent(adminKey)}`);
+    if (!res.ok) { toast("Помилка завантаження журналу","error"); return; }
+    _journalData = await res.json();
+    renderJournalTable(_journalData);
+    document.getElementById("journalWrap").classList.remove("hidden");
+    document.getElementById("btnPrintJournal").classList.remove("hidden");
+  } catch { toast("❌ Помилка з'єднання","error"); }
+}
+
+function getDates(from, to) {
+  const dates = [], cur = new Date(from), end = new Date(to);
+  while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+  return dates;
+}
+
+function renderJournalTable(data) {
+  const { teacher, students, marks, from, to } = data;
+  if (!students.length) {
+    document.getElementById("journalInner").innerHTML = '<p class="text-slate-500 text-sm p-4">У цього вчителя ще немає учнів</p>';
+    return;
+  }
+  const dates = getDates(from, to);
+  const markMap = {};
+  for (const m of marks) markMap[`${m.student_id}:${m.date}`] = m.status;
+  const sd = d => { const [,mo,dy]=d.split("-"); return `${dy}.${mo}`; };
+  const countH  = sid => dates.filter(d=>markMap[`${sid}:${d}`]==="Н").length;
+  const countPP = sid => dates.filter(d=>markMap[`${sid}:${d}`]==="П.П").length;
+
+  const headRow = dates.map(d=>`<th style="min-width:34px">${sd(d)}</th>`).join("");
+  const rows = students.map((s,i)=>{
+    const cells = dates.map(d=>{
+      const st = markMap[`${s.id}:${d}`];
+      if(st==="Н")   return `<td style="text-align:center;color:#f87171;font-weight:700">Н</td>`;
+      if(st==="П.П") return `<td style="text-align:center;color:#fbbf24;font-weight:600">П.П</td>`;
+      return `<td style="text-align:center;color:#334155">·</td>`;
+    }).join("");
+    const h  = countH(s.id);
+    const pp = countPP(s.id);
+    return `<tr class="trow">
+      <td style="text-align:right;padding:5px 6px;color:#64748b;font-size:11px">${i+1}</td>
+      <td class="name-cell px-3 py-2">${esc(s.full_name)}</td>
+      ${cells}
+      <td style="text-align:center;padding:5px 8px;color:#f87171;font-weight:700;font-size:12px">${h||""}</td>
+      <td style="text-align:center;padding:5px 8px;color:#fbbf24;font-size:12px">${pp||""}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("journalInner").innerHTML = `
+    <p class="text-xs text-slate-400 mb-2">
+      <i class="fa-solid fa-chalkboard-user mr-1 text-purple-400"></i>
+      <strong>${esc(teacher?.username)}</strong> · ${esc(teacher?.email)} · ${from} — ${to}
+    </p>
+    <div class="overflow-x-auto">
+    <table class="journal-table">
+      <thead><tr>
+        <th style="min-width:26px">#</th>
+        <th class="name-cell" style="text-align:left;padding:5px 12px">ПІБ</th>
+        ${headRow}
+        <th title="Відсутніх (Н)" style="min-width:30px;color:#f87171">Н</th>
+        <th title="Поважна причина" style="min-width:30px;color:#fbbf24">П.П</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function printJournal() {
+  if (!_journalData) return;
+  const { teacher, students, marks, from, to } = _journalData;
+  const dates = getDates(from, to);
+  const markMap = {};
+  for (const m of marks) markMap[`${m.student_id}:${m.date}`] = m.status;
+  const sd = d => { const [,mo,dy]=d.split("-"); return `${dy}.${mo}`; };
+  const countH  = sid => dates.filter(d=>markMap[`${sid}:${d}`]==="Н").length;
+  const countPP = sid => dates.filter(d=>markMap[`${sid}:${d}`]==="П.П").length;
+
+  const headRow = dates.map(d=>`<th style="min-width:28px;font-size:9px;padding:3px 2px">${sd(d)}</th>`).join("");
+  const rows = students.map((s,i)=>{
+    const cells = dates.map(d=>{
+      const st=markMap[`${s.id}:${d}`];
+      if(st==="Н")   return `<td style="text-align:center;color:#c00;font-weight:bold;padding:2px">Н</td>`;
+      if(st==="П.П") return `<td style="text-align:center;color:#a60;padding:2px">П.П</td>`;
+      return `<td style="text-align:center;color:#ddd;padding:2px">·</td>`;
+    }).join("");
+    const h=countH(s.id), pp=countPP(s.id);
+    return `<tr>
+      <td style="text-align:right;padding:3px 5px;color:#999;font-size:10px">${i+1}</td>
+      <td style="padding:3px 8px;font-size:11px;min-width:140px">${esc(s.full_name)}</td>
+      ${cells}
+      <td style="text-align:center;color:#c00;font-weight:bold;padding:3px">${h||""}</td>
+      <td style="text-align:center;color:#a60;padding:3px">${pp||""}</td>
+    </tr>`;
+  }).join("");
+
+  const w = window.open("","_blank");
+  w.document.write(`<html><head><title>Журнал — ${esc(teacher?.username)}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;padding:14px}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #ccc}
+    thead th{background:#f0f0f0;padding:4px 3px}
+    h2{font-size:12px;margin-bottom:8px}
+    .legend{font-size:10px;color:#777;margin-top:8px}
+    @page{size:landscape}
+  </style></head><body>
+  <h2>Журнал відвідуваності · ${esc(teacher?.username)} · ${from} — ${to}</h2>
+  <table><thead><tr>
+    <th style="min-width:22px">#</th>
+    <th style="text-align:left;min-width:140px;padding:4px 8px">ПІБ учня</th>
+    ${headRow}
+    <th style="min-width:26px;color:#c00">Н</th>
+    <th style="min-width:26px;color:#a60">П.П</th>
+  </tr></thead><tbody>${rows}</tbody></table>
+  <p class="legend">Н — відсутній &nbsp;·&nbsp; П.П — поважна причина &nbsp;·&nbsp; · — присутній</p>
+  </body></html>`);
+  w.document.close(); w.print();
+}
+
+// ── Admin Keys ────────────────────────────────────────────────────────────────
+async function loadKeys() {
+  try {
+    const res = await fetch(`${SERVER}/admin/keys?admin_key=${encodeURIComponent(adminKey)}`);
+    if (!res.ok) { document.getElementById("keysList").innerHTML='<p class="text-xs text-red-400">Помилка</p>'; return; }
+    const data = await res.json();
+    renderKeysList(data.keys || []);
+  } catch { document.getElementById("keysList").innerHTML='<p class="text-xs text-red-400">Помилка з\'єднання</p>'; }
+}
+
+function renderKeysList(keys) {
+  const el = document.getElementById("keysList");
+  if (!keys.length) { el.innerHTML='<p class="text-xs text-slate-500">Додаткових ключів поки немає</p>'; return; }
+  el.innerHTML = keys.map(k=>`
+    <div class="flex items-center justify-between bg-slate-800 rounded-xl px-4 py-3">
+      <div>
+        <p class="text-sm font-medium text-slate-200">${esc(k.label)}</p>
+        <p class="text-xs text-slate-500">Додано ${k.created||"—"}</p>
+      </div>
+      <button onclick="deleteKey(${k.id},'${esc(k.label)}')" title="Видалити"
+        class="w-7 h-7 rounded-lg bg-red-900/30 hover:bg-red-800/50 text-red-400 text-xs flex items-center justify-center transition-all flex-shrink-0 ml-3">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>`).join("");
+}
+
+function generateKey() {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const key = Array.from(crypto.getRandomValues(new Uint8Array(20)))
+    .map(b => chars[b % chars.length]).join("");
+  document.getElementById("keyValue").value = key;
+}
+
+async function addKey() {
+  const label = document.getElementById("keyLabel").value.trim();
+  const key   = document.getElementById("keyValue").value.trim();
+  if (!label || !key) { showResult("keyAddResult", false, "Заповніть назву і ключ"); return; }
+  if (key.length < 8) { showResult("keyAddResult", false, "Ключ мінімум 8 символів"); return; }
+  try {
+    const res = await fetch(`${SERVER}/admin/keys?admin_key=${encodeURIComponent(adminKey)}`, {
+      method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({label,key})
+    });
+    const data = await res.json();
+    if (!res.ok) { showResult("keyAddResult", false, "❌ "+(data.error||"Помилка")); return; }
+    showResult("keyAddResult", true, `✅ Ключ "${label}" додано`);
+    document.getElementById("keyLabel").value = "";
+    document.getElementById("keyValue").value = "";
+    toast("🔑 Ключ додано","success");
+    loadKeys();
+  } catch { showResult("keyAddResult", false, "❌ Помилка з'єднання"); }
+}
+
+async function deleteKey(id, label) {
+  if (!confirm(`Видалити ключ "${label}"?`)) return;
+  try {
+    const res = await fetch(`${SERVER}/admin/keys/${id}?admin_key=${encodeURIComponent(adminKey)}`, {method:"DELETE"});
+    if (res.ok) { toast("🗑️ Ключ видалено","success"); loadKeys(); }
+    else toast("❌ Не вдалося видалити","error");
+  } catch { toast("❌ Помилка з'єднання","error"); }
+}
+
+// ── Дії ───────────────────────────────────────────────────────────────────────
+async function quickRole(email, role) {
+  if (!confirm(`${role==="teacher"?"Зробити вчителем":"Зняти роль"}: ${email}?`)) return;
+  if (await apiSetRole(email, role)) { toast(role==="teacher"?"👩‍🏫 Роль призначено":"👤 Роль знято","success"); loadAll(); }
+}
+async function quickDelete(email) {
+  if (!confirm(`Видалити акаунт ${email}? Це незворотньо!`)) return;
+  if (await apiDeleteUser(email)) { toast("🗑️ Акаунт видалено","success"); loadAll(); }
+}
+async function deleteUser() {
+  const q = document.getElementById("deleteQuery").value.trim();
+  if (!q) return;
+  if (!confirm(`Видалити "${q}"? Незворотньо!`)) return;
+  const ok = await apiDeleteUser(q);
+  showResult("deleteResult", ok, ok ? `✅ Видалено "${q}"` : "❌ Не знайдено");
+  if (ok) { document.getElementById("deleteQuery").value=""; loadAll(); }
+}
+async function setTeacher() {
+  const q = document.getElementById("teacherQuery").value.trim(); if (!q) return;
+  const ok = await apiSetRole(q,"teacher");
+  showResult("teacherResult", ok, ok ? `✅ "${q}" тепер вчитель` : "❌ Не знайдено");
+  if (ok) loadAll();
+}
+async function setStudent() {
+  const q = document.getElementById("teacherQuery").value.trim(); if (!q) return;
+  const ok = await apiSetRole(q,"student");
+  showResult("teacherResult", ok, ok ? `✅ Роль знято з "${q}"` : "❌ Не знайдено");
+  if (ok) loadAll();
+}
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+async function apiDeleteUser(query) {
+  try {
+    const res = await fetch(`${SERVER}/admin/user?admin_key=${encodeURIComponent(adminKey)}`,
+      {method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({query})});
+    if (!res.ok) { toast("❌ "+(await res.json()).error,"error"); return false; }
+    return true;
+  } catch { toast("❌ Помилка з'єднання","error"); return false; }
+}
+async function apiSetRole(query, role) {
+  try {
+    const res = await fetch(`${SERVER}/admin/set-role?admin_key=${encodeURIComponent(adminKey)}`,
+      {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,role})});
+    if (!res.ok) { toast("❌ "+(await res.json()).error,"error"); return false; }
+    return true;
+  } catch { toast("❌ Помилка з'єднання","error"); return false; }
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+const TABS = ["stats","users","journals","keys","actions"];
+function showTab(name) {
+  TABS.forEach(t => {
+    document.getElementById(`view-${t}`).classList.toggle("hidden", t!==name);
+    document.getElementById(`tab-${t}`).classList.toggle("active", t===name);
+  });
+}
+function showResult(id, ok, msg) {
+  const el=document.getElementById(id);
+  el.textContent=msg; el.className=`mt-3 text-sm ${ok?"text-green-400":"text-red-400"}`;
+  el.classList.remove("hidden");
+}
+function esc(s){ return (s||"").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+let toastTimer;
+function toast(msg, type="success") {
+  const el=document.getElementById("toast");
+  document.getElementById("toastIcon").className = type==="success"
+    ? "fa-solid fa-check-circle text-green-400 text-lg"
+    : "fa-solid fa-circle-xmark text-red-400 text-lg";
+  document.getElementById("toastMsg").textContent=msg;
+  el.classList.add("show"); clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove("show"),3000);
+}
+</script>
+</body>
+</html>
